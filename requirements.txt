@@ -1,0 +1,9 @@
+streamlit
+langchain
+PyPDF2
+pymongo
+werkzeug
+sentence-transformers
+transformers
+faiss-cpu
+streamlit-cookies-manager
