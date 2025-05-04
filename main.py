@@ -1,5 +1,4 @@
 import streamlit as st
-from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -8,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from streamlit_cookies_manager import EncryptedCookieManager
 import datetime
 import uuid
+from PyPDF2 import PdfReader
 
 # === Setup MongoDB ===
 client = MongoClient("mongodb://localhost:27017/")
@@ -62,7 +62,6 @@ def authenticate_user(username, password):
     return False, None
 
 # === Sidebar Auth UI ===
-print(st.session_state.get("logged_in", False));
 if not st.session_state.get("logged_in", False):
     st.sidebar.title("Authentication")
     auth_mode = st.sidebar.radio("Choose", ["Login", "Register"])
