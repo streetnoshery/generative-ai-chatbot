@@ -1,5 +1,5 @@
 streamlit
-langchain
+langchain==0.3.24
 PyPDF2
 pymongo
 werkzeug
