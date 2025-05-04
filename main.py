@@ -10,10 +10,10 @@ import uuid
 from PyPDF2 import PdfReader
 
 # === Setup MongoDB ===
-client = MongoClient("mongodb://localhost:27017/")
-db = client["chatbot_db"]
-users_col = db["users"]
-pdfs_col = db["pdfs"]
+client = MongoClient("mongodb+srv://streetnoshery:Sumit%40Godwan%401062@streetnoshery.g7ufm.mongodb.net/")
+db = client["street_noshery"]
+users_col = db["chat_users"]
+pdfs_col = db["chat_pdfs"]
 
 # === Cookie Manager ===
 cookies = EncryptedCookieManager(
