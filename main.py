@@ -107,7 +107,7 @@ if st.session_state.get("logged_in", False):
         else:
             reader = PdfReader(file)
             text = "".join(page.extract_text() or "" for page in reader.pages).replace("\n", " ").strip()
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=15)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=500)
             chunks = splitter.split_text(text)
             pdfs_col.insert_one({
                 "filename": file.name,
@@ -134,7 +134,7 @@ if st.session_state.get("logged_in", False):
             @st.cache_resource
             def get_answer_pipeline():
                 from transformers import pipeline
-                return pipeline("question-answering", model="distilbert-base-uncased-distilled-squad")
+                return pipeline("question-answering", model="deepset/roberta-base-squad2")
 
             context = " ".join([doc.page_content for doc in match])
             qa_pipeline = get_answer_pipeline()
