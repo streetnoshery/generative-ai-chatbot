@@ -5,9 +5,10 @@ from langchain_community.vectorstores import FAISS
 from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from streamlit_cookies_manager import EncryptedCookieManager
+from PyPDF2 import PdfReader
 import datetime
 import uuid
-from PyPDF2 import PdfReader
+import time
 
 # === Setup MongoDB ===
 client = MongoClient("mongodb+srv://streetnoshery:Sumit%40Godwan%401062@streetnoshery.g7ufm.mongodb.net/")
@@ -32,7 +33,6 @@ if user:
     st.session_state.user = user
 
 # === Auth Logic ===
-
 def register_user(username, password):
     if users_col.find_one({"username": username}):
         return False, "Username already exists."
@@ -78,7 +78,7 @@ if not st.session_state.get("logged_in", False):
             st.session_state.logged_in = True
             st.session_state.user = result
             st.sidebar.success(f"Welcome, {username}!")
-            st.rerun()  # This line will trigger the page reload after logout
+            st.rerun()
         else:
             st.sidebar.error(result or "Invalid credentials")
 
@@ -118,14 +118,18 @@ if st.session_state.get("logged_in", False):
             })
             st.success(f"{file.name} uploaded!")
 
-    # Q&A Section
+    # === Chatbot Q&A Section ===
     if chunks:
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
         vector_store = FAISS.from_texts(chunks, embeddings)
-        user_question = st.text_input("Ask a question")
 
-        if user_question:
-            match = vector_store.similarity_search(user_question, k=5)
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        user_input = st.chat_input("Ask something about your document...")
+
+        if user_input:
+            match = vector_store.similarity_search(user_input, k=5)
 
             @st.cache_resource
             def get_answer_pipeline():
@@ -134,19 +138,31 @@ if st.session_state.get("logged_in", False):
 
             context = " ".join([doc.page_content for doc in match])
             qa_pipeline = get_answer_pipeline()
-            st.write(f"**Answer:** {qa_pipeline(question=user_question, context=context)['answer']}")
+            answer_raw = qa_pipeline(question=user_input, context=context)['answer']
 
-    # Logout
+            # Simulate streaming
+            bot_message_placeholder = st.empty()
+            streamed_text = ""
+            for word in answer_raw.split():
+                streamed_text += word + " "
+                bot_message_placeholder.markdown(f"**{streamed_text}**")
+                time.sleep(0.05)
+
+            # Save messages
+            st.session_state.chat_history.append({"role": "user", "text": user_input})
+            st.session_state.chat_history.append({"role": "bot", "text": streamed_text.strip()})
+
+        # Display history
+        for message in st.session_state.chat_history:
+            if message["role"] == "user":
+                st.chat_message("user").markdown(message["text"])
+            else:
+                st.chat_message("assistant").markdown(f"**{message['text']}**")
+
+    # === Logout ===
     if st.sidebar.button("Logout"):
-        print("1", st.session_state.get("logged_in", False));
-        cookies["session_token"] = ""  # Set session token to None
-        print("1", st.session_state.get("logged_in", False));
-        cookies.save()  # Save the updated cookies
-        print("2", st.session_state.get("logged_in", False));
-        print("3", st.session_state.get("logged_in", False));
-        # Instead of using st.stop(), update session state to trigger an auto-refresh
-        st.session_state.logged_in = False  # Ensure logged_in flag is cleared
-        st.session_state.user = None  # Clear user data
-        print("4", st.session_state.get("logged_in", False));
-        st.rerun()  # This line will trigger the page reload after logout
-        # st.stop()  # Stop execution to refresh the app UI after logout
+        cookies["session_token"] = ""
+        cookies.save()
+        st.session_state.logged_in = False
+        st.session_state.user = None
+        st.rerun()
