@@ -6,9 +6,11 @@ from pymongo import MongoClient
 from werkzeug.security import generate_password_hash, check_password_hash
 from streamlit_cookies_manager import EncryptedCookieManager
 from PyPDF2 import PdfReader
+from transformers import pipeline
 import datetime
 import uuid
 import time
+import re
 
 # === Setup MongoDB ===
 client = MongoClient("mongodb+srv://streetnoshery:Sumit%40Godwan%401062@streetnoshery.g7ufm.mongodb.net/")
@@ -17,11 +19,7 @@ users_col = db["chat_users"]
 pdfs_col = db["chat_pdfs"]
 
 # === Cookie Manager ===
-cookies = EncryptedCookieManager(
-    prefix="chatbot/",
-    password="your-secure-password"  # Use env vars in production
-)
-
+cookies = EncryptedCookieManager(prefix="chatbot/", password="your-secure-password")
 if not cookies.ready():
     st.stop()
 
@@ -107,7 +105,7 @@ if st.session_state.get("logged_in", False):
         else:
             reader = PdfReader(file)
             text = "".join(page.extract_text() or "" for page in reader.pages).replace("\n", " ").strip()
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=500)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
             chunks = splitter.split_text(text)
             pdfs_col.insert_one({
                 "filename": file.name,
@@ -118,8 +116,24 @@ if st.session_state.get("logged_in", False):
             })
             st.success(f"{file.name} uploaded!")
 
-    # === Chatbot Q&A Section ===
-    if chunks:
+    # === NLP Section: NER + QA ===
+    if text:
+        st.subheader("📄 Extracted Information")
+
+        with st.expander("🔍 Named Entity Recognition (Name, Email, Phone)"):
+            ner_pipe = pipeline("ner", model="dslim/bert-base-NER", aggregation_strategy="simple")
+            entities = ner_pipe(text)
+
+            name = next((e['word'] for e in entities if e['entity_group'] == 'PER'), "Not found")
+            st.write(f"**Name:** {name}")
+
+            email = re.search(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+", text)
+            phone = re.search(r"(\+?\d{1,3})?[-.\s]?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}", text)
+
+            st.write(f"**Email:** {email.group(0) if email else 'Not found'}")
+            st.write(f"**Phone:** {phone.group(0) if phone else 'Not found'}")
+
+        st.subheader("🤖 Ask a Question")
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
         vector_store = FAISS.from_texts(chunks, embeddings)
 
@@ -133,14 +147,13 @@ if st.session_state.get("logged_in", False):
 
             @st.cache_resource
             def get_answer_pipeline():
-                from transformers import pipeline
                 return pipeline("question-answering", model="deepset/roberta-base-squad2")
 
             context = " ".join([doc.page_content for doc in match])
             qa_pipeline = get_answer_pipeline()
             answer_raw = qa_pipeline(question=user_input, context=context)['answer']
 
-            # Simulate streaming
+            # Stream answer
             bot_message_placeholder = st.empty()
             streamed_text = ""
             for word in answer_raw.split():
@@ -148,11 +161,10 @@ if st.session_state.get("logged_in", False):
                 bot_message_placeholder.markdown(f"**{streamed_text}**")
                 time.sleep(0.05)
 
-            # Save messages
+            # Save history
             st.session_state.chat_history.append({"role": "user", "text": user_input})
             st.session_state.chat_history.append({"role": "bot", "text": streamed_text.strip()})
 
-        # Display history
         for message in st.session_state.chat_history:
             if message["role"] == "user":
                 st.chat_message("user").markdown(message["text"])
